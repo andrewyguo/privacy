@@ -1,4 +1,4 @@
-# Copyright 2020 The TensorFlow Authors. All Rights Reserved.
+# Copyright 2021 The TensorFlow Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,10 +14,6 @@
 # =============================================================================
 """Run auditing on the FashionMNIST dataset."""
 
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-
 import numpy as np
 import tensorflow.compat.v1 as tf
 
@@ -32,6 +28,9 @@ import audit
 
 #### FLAGS
 FLAGS = flags.FLAGS
+flags.DEFINE_boolean(
+    'dpsgd', True, 'If True, train with DP-SGD. If False, '
+    'train with vanilla SGD.')
 flags.DEFINE_float('learning_rate', 0.15, 'Learning rate for training')
 flags.DEFINE_float('noise_multiplier', 1.1,
                    'Ratio of the standard deviation to the clipping norm')
@@ -90,16 +89,51 @@ def build_model(x, y):
     raise NotImplementedError
   return model
 
+def custom_loss(model, train_x):
+  std_dev_obj = 0.03
+  noise_obj = np.random.normal(scale=std_dev_obj, size=np.shape(model.trainable_weights[0]))
+  noise_obj_2 = np.random.normal(scale=std_dev_obj, size=250)
+
+  print("shape of model.trainable_weights[0]: ", np.shape(model.trainable_weights[0]))
+  print(model.trainable_weights[0])
+  print("noise_obj.shape", noise_obj.shape)
+
+  # print("train_x.shape", train_x.shape)
+
+  def custom_loss_objective_perturbation(y_true, y_pred):
+    loss_fn = tf.keras.losses.CategoricalCrossentropy(
+        from_logits=True, reduction=tf.losses.Reduction.NONE)
+
+    loss_value = loss_fn(y_true, y_pred)
+    print("loss_value", loss_value)
+    # loss_value += noise_obj * model.trainable_weights[0]
+    loss_value += noise_obj_2
+
+    print("loss_value 2", loss_value)
+
+    return tf.reduce_mean(loss_value, axis=-1)
+
+  return custom_loss_objective_perturbation
 
 def train_model(model, train_x, train_y, save_weights=False):
   """Train the model on given data."""
+  print("Training model:", model.name)
+  print("Using DPSGD: ", FLAGS.dpsgd)
+  
   optimizer = dp_optimizer_vectorized.VectorizedDPSGD(
       l2_norm_clip=FLAGS.l2_norm_clip,
       noise_multiplier=FLAGS.noise_multiplier,
       num_microbatches=FLAGS.microbatches,
       learning_rate=FLAGS.learning_rate)
 
-  loss = tf.keras.losses.CategoricalCrossentropy(
+  if not FLAGS.dpsgd: # Use vanilla optimizer
+    optimizer = tf.train.GradientDescentOptimizer(learning_rate=FLAGS.learning_rate)
+
+  # define custom loss for objective perturbation
+  if True and not FLAGS.dpsgd:
+    loss = custom_loss(model, train_x)
+  else: 
+    loss = tf.keras.losses.CategoricalCrossentropy(
       from_logits=True, reduction=tf.losses.Reduction.NONE)
 
   # Compile model with Keras
@@ -116,11 +150,14 @@ def train_model(model, train_x, train_y, save_weights=False):
     model.set_weights(wts)
 
   # Train model with Keras
+  print("fitting model...")
   model.fit(train_x, train_y,
             epochs=FLAGS.epochs,
             validation_data=(train_x, train_y),
             batch_size=FLAGS.batch_size,
             verbose=0)
+
+  print("training model done...")
   return model
 
 
@@ -146,21 +183,21 @@ def main(unused_argv):
   # Load training and test data.
   np.random.seed(0)
 
-  (trn_x, trn_y), _ = tf.keras.datasets.fashion_mnist.load_data()
-  trn_inds = np.where(trn_y < 2)[0]
+  (train_x, train_y), _ = tf.keras.datasets.fashion_mnist.load_data()
+  train_inds = np.where(train_y < 2)[0]
 
-  trn_x = -.5 + trn_x[trn_inds] / 255.
-  trn_y = np.eye(2)[trn_y[trn_inds]]
+  train_x = -.5 + train_x[train_inds] / 255.
+  train_y = np.eye(2)[train_y[train_inds]]
 
   # subsample dataset
-  ss_inds = np.random.choice(trn_x.shape[0], trn_x.shape[0]//2, replace=False)
-  trn_x = trn_x[ss_inds]
-  trn_y = trn_y[ss_inds]
+  ss_inds = np.random.choice(train_x.shape[0], train_x.shape[0]//2, replace=False)
+  train_x = train_x[ss_inds]
+  train_y = train_y[ss_inds]
 
-  init_model = build_model(trn_x, trn_y)
-  _ = train_model(init_model, trn_x, trn_y, save_weights=True)
+  init_model = build_model(train_x, train_y)
+  _ = train_model(init_model, train_x, train_y, save_weights=True)
 
-  auditor = audit.AuditAttack(trn_x, trn_y, train_and_score)
+  auditor = audit.AuditAttack(train_x, train_y, train_and_score)
 
   thresh, _, _ = auditor.run(FLAGS.pois_ct, FLAGS.attack_type, FLAGS.num_trials,
                              alpha=FLAGS.alpha, threshold=None,
@@ -170,9 +207,9 @@ def main(unused_argv):
                             alpha=FLAGS.alpha, threshold=thresh,
                             l2_norm=FLAGS.attack_l2_norm)
 
-  epsilon_ub = compute_epsilon(trn_x.shape[0])
+  epsilon_upper_bound = compute_epsilon(train_x.shape[0])
 
-  print("Analysis epsilon is {}.".format(epsilon_ub))
+  print("Analysis epsilon is {}.".format(epsilon_upper_bound))
   print("At threshold={}, epsilon={}.".format(thresh, eps))
   print("The best accuracy at distinguishing poisoning is {}.".format(acc))
 

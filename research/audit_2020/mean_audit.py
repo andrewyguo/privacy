@@ -1,4 +1,4 @@
-# Copyright 2020 The TensorFlow Authors. All Rights Reserved.
+# Copyright 2021 The TensorFlow Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,10 +14,6 @@
 # =============================================================================
 """Auditing a model which computes the mean of a synthetic dataset.
    This gives an example for instrumenting the auditor to audit a user-given sample."""
-
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
 
 import numpy as np
 import tensorflow.compat.v1 as tf
@@ -75,6 +71,8 @@ def build_model(x, y):
 
 def train_model(model, train_x, train_y):
   """Train the model on given data."""
+  print("Training model:", model.name)
+
   optimizer = dp_optimizer_vectorized.VectorizedDPSGD(
       l2_norm_clip=FLAGS.l2_norm_clip,
       noise_multiplier=FLAGS.noise_multiplier,
@@ -93,6 +91,8 @@ def train_model(model, train_x, train_y):
             validation_data=(train_x, train_y),
             batch_size=FLAGS.batch_size,
             verbose=0)
+
+  print("training model done...")
   return model
 
 
@@ -146,9 +146,9 @@ def main(unused_argv):
   _, eps, acc = auditor.run(1, None, FLAGS.num_trials, alpha=FLAGS.alpha,
                             threshold=thresh)
 
-  epsilon_ub = compute_epsilon(FLAGS.batch_size)
+  epsilon_upper_bound = compute_epsilon(FLAGS.batch_size)
 
-  print("Analysis epsilon is {}.".format(epsilon_ub))
+  print("Analysis epsilon is {}.".format(epsilon_upper_bound))
   print("At threshold={}, epsilon={}.".format(thresh, eps))
   print("The best accuracy at distinguishing poisoning is {}.".format(acc))
 
