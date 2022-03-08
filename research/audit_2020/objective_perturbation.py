@@ -76,6 +76,8 @@ def build_model(x, y):
   """Build a keras model."""
   input_shape = x.shape[1:]
   num_classes = y.shape[1]
+
+  print("input_shape", input_shape, "num_classes", num_classes)
   l2 = 0
   if FLAGS.model == 'lr':
     print("Building lr model with input_shape: ", input_shape)
@@ -132,6 +134,8 @@ def train_model(model, train_x, train_y, save_weights=False):
   """Train the model on given data."""
   print("Training model:", model.name)
   print("Using DPSGD: ", FLAGS.dpsgd)
+  print(" save_weights: ", save_weights)
+  print("Using load_weights: ", FLAGS.load_weights)
 
   # print("First entry in train_x", train_x[0])
   # print("shape of First entry in train_x", np.shape(train_x[0]))
@@ -215,8 +219,8 @@ def main(unused_argv):
 
   theta, _ = ApproximateMinimaPerturbationLR.run_classification(train_x, train_y, epsilon=0.1, delta=0.01, lambda_param=None)
 
-  print("type(theta):", type(theta))
-  print("theta.shape():", theta.shape())
+  # print("type(theta):", type(theta))
+  # print("theta.shape():", theta.shape())
   
   init_model = build_model(train_x, train_y)
   _ = train_model(init_model, train_x, train_y, save_weights=True)

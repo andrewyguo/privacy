@@ -31,6 +31,10 @@ FLAGS = flags.FLAGS
 flags.DEFINE_boolean(
     'dpsgd', True, 'If True, train with DP-SGD. If False, '
     'train with vanilla SGD.')
+flags.DEFINE_boolean(
+    'op', False, 'If True, train with custom loss with objective perturbation. If False, '
+    'train with vanilla SGD.')
+flags.DEFINE_float('noise_std', 0.0, 'Standard deviation for noise')
 flags.DEFINE_float('learning_rate', 0.15, 'Learning rate for training')
 flags.DEFINE_float('noise_multiplier', 1.1,
                    'Ratio of the standard deviation to the clipping norm')
@@ -70,7 +74,12 @@ def build_model(x, y):
   input_shape = x.shape[1:]
   num_classes = y.shape[1]
   l2 = 0
+  # This is (2, 28) and num_classes is 2 
+  print("input_shape", input_shape, "num_classes", num_classes)
+
+
   if FLAGS.model == 'lr':
+    print("Building lr model with input_shape: ", input_shape)
     model = tf.keras.Sequential([
         tf.keras.layers.Flatten(input_shape=input_shape),
         tf.keras.layers.Dense(num_classes, kernel_initializer='glorot_normal',
@@ -89,25 +98,30 @@ def build_model(x, y):
     raise NotImplementedError
   return model
 
-def custom_loss(model, train_x):
-  std_dev_obj = 0.03
-  noise_obj = np.random.normal(scale=std_dev_obj, size=np.shape(model.trainable_weights[0]))
-  noise_obj_2 = np.random.normal(scale=std_dev_obj, size=250)
 
+def custom_loss(model, train_x):
+
+  std_dev_obj = FLAGS.noise_std
+# noise_obj = np.random.normal(scale=std_dev_obj, size=np.shape(model.trainable_weights[0]))
+  noise_obj = np.random.normal(scale=std_dev_obj, size=np.shape(model.trainable_weights[0]))
+  
   print("shape of model.trainable_weights[0]: ", np.shape(model.trainable_weights[0]))
+  print("shape of model.trainable_weights[1]: ", np.shape(model.trainable_weights[1]))
   print(model.trainable_weights[0])
   print("noise_obj.shape", noise_obj.shape)
+  print("noise_obj, first few entries", noise_obj[:10])
 
-  # print("train_x.shape", train_x.shape)
+  print("train_x.shape", train_x.shape)
 
   def custom_loss_objective_perturbation(y_true, y_pred):
     loss_fn = tf.keras.losses.CategoricalCrossentropy(
         from_logits=True, reduction=tf.losses.Reduction.NONE)
 
     loss_value = loss_fn(y_true, y_pred)
-    print("loss_value", loss_value)
+    # print("loss_value", loss_value)
     # loss_value += noise_obj * model.trainable_weights[0]
-    loss_value += noise_obj_2
+    print("sum of (noise_obj * model.trainable_weights[0])", tf.math.reduce_sum(noise_obj * model.trainable_weights[0]))
+    loss_value += tf.math.reduce_sum(noise_obj * model.trainable_weights[0]) / train_x.shape[0]
 
     print("loss_value 2", loss_value)
 
@@ -119,6 +133,9 @@ def train_model(model, train_x, train_y, save_weights=False):
   """Train the model on given data."""
   print("Training model:", model.name)
   print("Using DPSGD: ", FLAGS.dpsgd)
+
+  # print("First entry in train_x", train_x[0])
+  print("shape of First entry in train_x", np.shape(train_x[0]))
   
   optimizer = dp_optimizer_vectorized.VectorizedDPSGD(
       l2_norm_clip=FLAGS.l2_norm_clip,
@@ -130,7 +147,7 @@ def train_model(model, train_x, train_y, save_weights=False):
     optimizer = tf.train.GradientDescentOptimizer(learning_rate=FLAGS.learning_rate)
 
   # define custom loss for objective perturbation
-  if True and not FLAGS.dpsgd:
+  if FLAGS.op:
     loss = custom_loss(model, train_x)
   else: 
     loss = tf.keras.losses.CategoricalCrossentropy(
@@ -194,8 +211,8 @@ def main(unused_argv):
   train_x = train_x[ss_inds]
   train_y = train_y[ss_inds]
 
-  init_model = build_model(train_x, train_y)
-  _ = train_model(init_model, train_x, train_y, save_weights=True)
+  # init_model = build_model(train_x, train_y)
+  # _ = train_model(init_model, train_x, train_y, save_weights=True)
 
   auditor = audit.AuditAttack(train_x, train_y, train_and_score)
 
@@ -213,5 +230,6 @@ def main(unused_argv):
   print("At threshold={}, epsilon={}.".format(thresh, eps))
   print("The best accuracy at distinguishing poisoning is {}.".format(acc))
 
+  print("noise_std: ", FLAGS.noise_std)
 if __name__ == '__main__':
   app.run(main)

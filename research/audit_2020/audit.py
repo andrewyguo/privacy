@@ -109,6 +109,7 @@ class AuditAttack(object):
           threshold=None, l2_norm=10):
     """Complete auditing algorithm. Generates poisoning if necessary."""
     if self.poisoning is None:
+      print("self.poisoning is None, generating poisoning...")
       self.poisoning = self.make_poisoning(pois_ct, attack_type, l2_norm)
       self.poisoning['data'] = self.poisoning[pois_ct]
 
