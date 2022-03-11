@@ -5,14 +5,26 @@ class LogisticRegression():
     @staticmethod
     def loss(theta, x, y, lambda_param=None):
         """Loss function for logistic regression with without regularization"""
-        print("theta.shape():", len(theta))
-        print(theta)
-        print("len(x):", len(x))
-        print("len(x)[0]:", len(x[0]))
+        # print("theta.shape():", len(theta))
+        # print(theta)
+        # print("len(x):", len(x))
+        # print("len(x)[0]:", len(x[0]))
         # print("x[0]:", x[0])
 
-        x_dot_theta = x.dot(theta)
-        exponent = - y * x_dot_theta
+        # print("Shape of the initial model x: ", x.shape)
+        # print("Shape of the initial model theta: ", theta.shape)
+
+        # print("Shape of the initial model y: ", y.shape)
+
+        exponent =  -1 * y * x.dot(theta)
+
+        # print("y[0:10]", y[0:10])
+        # print("exponent[0:10]", exponent[0:10])
+        # print("exponent max", max(exponent))
+
+        # print("np.sum(np.log(1+np.exp(exponent))) / len(x)", np.sum(np.log(1+np.exp(exponent))) / len(x))
+        # print(" len(x)",  len(x))
+
         return np.sum(np.log(1+np.exp(exponent))) / len(x)
 
     @staticmethod
