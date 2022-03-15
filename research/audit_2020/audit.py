@@ -113,6 +113,7 @@ class AuditAttack(object):
       self.poisoning = self.make_poisoning(pois_ct, attack_type, l2_norm)
       self.poisoning['data'] = self.poisoning[pois_ct]
 
+    print("Inside auditor.run, created poisoned dataset")
     poison_scores, unpois_scores = self.run_experiments(num_trials)
 
     results = compute_results(poison_scores, unpois_scores, pois_ct,

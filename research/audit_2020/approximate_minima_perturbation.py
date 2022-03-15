@@ -25,6 +25,8 @@ def amp_run_classification(x, y, loss_func, grad_func,
     # initial model
     x0 = np.zeros(shape=x.shape[1])
 
+    print("Shape of the initial model x0: ", x0.shape)
+
     # hard-code the split for obj/out
     delta_out_frac = eps_out_frac
 
@@ -103,6 +105,7 @@ def amp_run_classification(x, y, loss_func, grad_func,
     if USE_LOWMEM:
         c = 200
         opts = {'gtol': effective_gamma/c}
+        print("Calling minimize(private_loss, x0, (x, y), method='L-BFGS-B'")
         result = minimize(private_loss, x0, (x, y), method='L-BFGS-B',
                           jac=private_gradient, options=opts)
         theta = result.x
@@ -131,6 +134,8 @@ def amp_run_classification(x, y, loss_func, grad_func,
             cb = None
 
         opts = {'gtol': effective_gamma, 'norm': 2}
+        print("Calling minimize(private_loss, x0, (x, y), method='BFGS'")
+
         result = minimize(private_loss, x0, (x, y), method='BFGS',
                           jac=private_gradient, options=opts, callback=cb)
         theta = result.x

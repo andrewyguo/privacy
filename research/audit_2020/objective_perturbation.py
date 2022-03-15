@@ -187,10 +187,24 @@ def train_model(model, train_x, train_y, save_weights=False):
 def membership_test(model, pois_x, pois_y):
   """Membership inference - detect poisoning."""
   # Change this to use scipy model from AMP paper to get probs 
-  probs = model.predict(np.concatenate([pois_x, np.zeros_like(pois_x)]))
+  input_array = np.concatenate([pois_x, np.zeros_like(pois_x)])
+  print("input_array:", input_array)
+  print(" input_array.shape:", input_array.shape)
+  print(" pois_x.shape:", pois_x.shape)
+  print(" pois_y:", pois_y)
+  print(" pois_y.shape:", pois_y.shape)
+
+
+  probs = model.predict(input_array)
+
   print("type(probs)", type(probs))
+  print(" probs.shape:", probs.shape)
+
   print(probs)
-  return np.multiply(probs[0, :] - probs[1, :], pois_y).sum()
+  res = np.multiply(probs[0, :] - probs[1, :], pois_y).sum()
+
+  print("res:", res)
+  return res
 
 
 def train_and_score(dataset):
@@ -201,14 +215,21 @@ def train_and_score(dataset):
   tf.reset_default_graph()
   # Make Changes here, need to call ApproximateMinimaPerturbationLR.run_classification instead 
   # x -> train_x, y -> train_y, note the first call to build_model in the main function 
-  # x = np.reshape(x, (x.shape[0], x.shape[1] * x.shape[2]))
+  print(" x.shape:", x.shape)
+
+  model = build_model(x, y)
+  model = train_model(model, x, y)
 
   print("y[0:10] ", y[0:10])
-  y = np.argmax(y, axis=1)
+  # x = np.reshape(x, (x.shape[0], x.shape[1] * x.shape[2]))
+  # y = np.argmax(y, axis=1)
   # pois_y = np.argmax(pois_y, axis=1)
-  pois_y = 1 if pois_y[1] == 1 else 0
+  # pois_y = 1 if pois_y[1] == 1 else 0
   print("y[0:10] ", y[0:10])
   print("pois_y", pois_y)
+
+  # theta, _ = ApproximateMinimaPerturbationLR.run_classification(x, y, epsilon=1, delta=0.1, lambda_param=None)
+
   
   # print("Shape of x, y, pois_x, pois_y in train_and_score: ", x.shape, y.shape,pois_x.shape,pois_y.shape)
 
