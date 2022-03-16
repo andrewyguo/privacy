@@ -32,6 +32,9 @@ from approximate_minima_perturbation import ApproximateMinimaPerturbationLR, App
 import pandas as pd
 from sklearn.preprocessing import LabelEncoder, OneHotEncoder
 
+
+from datetime import datetime
+
 #### FLAGS
 FLAGS = flags.FLAGS
 flags.DEFINE_boolean(
@@ -186,70 +189,47 @@ def train_model(model, train_x, train_y, save_weights=False):
 
 def membership_test(model, pois_x, pois_y):
   """Membership inference - detect poisoning."""
-  # Change this to use scipy model from AMP paper to get probs 
-  # input_array = np.concatenate([pois_x, np.zeros_like(pois_x)])
-  # print("input_array:", input_array)
-  # print(" input_array.shape:", input_array.shape)
-  # print(" pois_x.shape:", pois_x.shape)
-  # print(" pois_y.shape:", pois_y.shape)
 
   pois_y = np.array([0, 1]) if pois_y == 1 else np.array([1, 0])
 
-  print(" pois_y:", pois_y)
-
-  # pois_x = np.reshape(pois_x, (pois_x.shape[0] * pois_x.shape[1]))
   res_1 = 1.0 / (1 + np.exp(pois_x.dot(model)))
   res_2 = 1.0 / (1 + np.exp(np.zeros_like(pois_x).dot(model)))
-
-  # probs = model.predict(input_array)
 
   probs = np.array([[1 - res_1, res_1], 
                     [1 - res_2, res_2]])
 
-  print("type(probs)", type(probs))
-  print(" probs.shape:", probs.shape)
-
-  print(probs)
   res = np.multiply(probs[0, :] - probs[1, :], pois_y).sum()
 
-  print("res:", res)
   return res
 
 
 def train_and_score(dataset):
   """Complete training run with membership inference score."""
-  x, y, pois_x, pois_y, i = dataset
+  x, y, pois_x, pois_y, i, eps = dataset
   np.random.seed(i)
   tf.set_random_seed(i)
   tf.reset_default_graph()
-  # Make Changes here, need to call ApproximateMinimaPerturbationLR.run_classification instead 
-  # x -> train_x, y -> train_y, note the first call to build_model in the main function 
-  print(" x.shape:", x.shape)
 
   # model = build_model(x, y)
   # model = train_model(model, x, y)
 
-  print("y[0:10] ", y[0:10])
   if len(x.shape) == 3:
     x = np.reshape(x, (x.shape[0], x.shape[1] * x.shape[2]))
   
   y = np.argmax(y, axis=1)
-  # pois_y = np.argmax(pois_y, axis=1)
   pois_y = 1 if pois_y[1] == 1 else 0
-  print("y[0:10] ", y[0:10])
-  # print("pois_y", pois_y)
 
-  model, _ = ApproximateMinimaPerturbationLR.run_classification(x, y, epsilon=1, delta=0.1, lambda_param=None)
+  model, _ = ApproximateMinimaPerturbationLR.run_classification(x, y, epsilon=eps, delta=0.1, lambda_param=None)
 
-  
-  # print("Shape of x, y, pois_x, pois_y in train_and_score: ", x.shape, y.shape,pois_x.shape,pois_y.shape)
-
-  # model = build_model(x, y)
-  # model = train_model(model, x, y)
   return membership_test(model, pois_x, pois_y)
 
 
 def main(unused_argv):
+  # eps_vals = [0.1, 0.3, 1, 3, 10]
+  eps_vals = [ 10]
+  
+  output = open("output/auditing_output_{}".format(datetime.now()), "w")
+
   del unused_argv
   # Load training and test data.
   np.random.seed(0)
@@ -258,17 +238,8 @@ def main(unused_argv):
   train_inds = np.where(train_y < 2)[0]
 
   train_x = -.5 + train_x[train_inds] / 255.
-  # print("train_y:", train_y)
-  # print("train_y:", "type(train_y):", type(train_y), len(train_y))
 
   train_y = np.eye(2)[train_y[train_inds]]
-  # print("train_inds[0:10] ", train_inds[0:10])
-  # print("train_y[0:50] ", train_y[0:50])
-  # train_y = train_y[train_inds]
-  # print("AFTER train_y.shape():", train_y.shape())
-
-  # print("train_y after:", train_y, "Len: ",  len(train_y))
-  # print("train_y[0:10] ", train_y[0:10])
 
 
   # subsample dataset
@@ -277,37 +248,30 @@ def main(unused_argv):
   train_y = train_y[ss_inds]
 
   train_x = np.reshape(train_x, (train_x.shape[0], train_x.shape[1] * train_x.shape[2]))
-  # Change train_y to 
-  print("inside main: train_x.shape():", train_x.shape)
-  print("inside main: train_y.shape():", train_y.shape)
 
+  output.write(datetime.now().strftime("%d/%m/%Y %H:%M:%S"))
+  for analysis_eps in eps_vals: 
+    auditor = audit.AuditAttack(train_x, train_y, train_and_score)
 
-  # theta, _ = ApproximateMinimaPerturbationLR.run_classification(train_x, train_y, epsilon=10, delta=0.1, lambda_param=None)
+    thresh, _, _ = auditor.run(FLAGS.pois_ct, FLAGS.attack_type, FLAGS.num_trials,
+                              alpha=FLAGS.alpha, threshold=None,
+                              l2_norm=FLAGS.attack_l2_norm, eps=analysis_eps)
 
-  # print("type(theta):", type(theta))
-  # print("theta.shape():", theta.shape)
-  # print("theta[0:10]", theta[0:10])
-  
-  # This inital step is kind of useless, each audit attack seperately trains and scores its own model 
-  # init_model = build_model(train_x, train_y)
-  # _ = train_model(init_model, train_x, train_y, save_weights=True)
+    _, eps, acc = auditor.run(FLAGS.pois_ct, FLAGS.attack_type, FLAGS.num_trials,
+                              alpha=FLAGS.alpha, threshold=thresh,
+                              l2_norm=FLAGS.attack_l2_norm, eps=analysis_eps)
 
-  auditor = audit.AuditAttack(train_x, train_y, train_and_score)
+    # epsilon_upper_bound = compute_epsilon(train_x.shape[0])
 
-  thresh, _, _ = auditor.run(FLAGS.pois_ct, FLAGS.attack_type, FLAGS.num_trials,
-                             alpha=FLAGS.alpha, threshold=None,
-                             l2_norm=FLAGS.attack_l2_norm)
+    print("Analysis epsilon is {}.".format(analysis_eps))
+    print("At threshold={}, epsilon={}.".format(thresh, eps))
+    print("The best accuracy at distinguishing poisoning is {}.".format(acc))
 
-  # _, eps, acc = auditor.run(FLAGS.pois_ct, FLAGS.attack_type, FLAGS.num_trials,
-  #                           alpha=FLAGS.alpha, threshold=thresh,
-  #                           l2_norm=FLAGS.attack_l2_norm)
+    output.write("Analysis epsilon is {}.".format(eps))
+    output.write("At threshold={}, epsilon={}.".format(thresh, eps))
+    output.write("The best accuracy at distinguishing poisoning is {}.".format(acc))
 
-  # epsilon_upper_bound = compute_epsilon(train_x.shape[0])
-
-  # print("Analysis epsilon is {}.".format(epsilon_upper_bound))
-  # print("At threshold={}, epsilon={}.".format(thresh, eps))
-  # print("The best accuracy at distinguishing poisoning is {}.".format(acc))
-
+  output.close()
   # print("noise_std: ", FLAGS.noise_std)
 if __name__ == '__main__':
   app.run(main)

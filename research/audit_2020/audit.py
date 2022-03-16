@@ -89,7 +89,7 @@ class AuditAttack(object):
     return attacks.make_many_poisoned_datasets(self.train_x, self.train_y, [pois_ct],
                                   attack=attack_type, l2_norm=l2_norm)
 
-  def run_experiments(self, num_trials):
+  def run_experiments(self, num_trials, eps):
     """Runs all training experiments."""
     (pois_x1, pois_y1), (pois_x2, pois_y2) = self.poisoning['data']
     sample_x, sample_y = self.poisoning['pois']
@@ -98,15 +98,15 @@ class AuditAttack(object):
     unpois_scores = []
 
     for i in range(num_trials):
-      poison_tuple = (pois_x1, pois_y1, sample_x, sample_y, i)
-      unpois_tuple = (pois_x2, pois_y2, sample_x, sample_y, num_trials + i)
+      poison_tuple = (pois_x1, pois_y1, sample_x, sample_y, i, eps)
+      unpois_tuple = (pois_x2, pois_y2, sample_x, sample_y, num_trials + i, eps)
       poison_scores.append(self.train_function(poison_tuple))
       unpois_scores.append(self.train_function(unpois_tuple))
 
     return poison_scores, unpois_scores
 
   def run(self, pois_ct, attack_type, num_trials, alpha=0.05,
-          threshold=None, l2_norm=10):
+          threshold=None, l2_norm=10, eps=1.0):
     """Complete auditing algorithm. Generates poisoning if necessary."""
     if self.poisoning is None:
       print("self.poisoning is None, generating poisoning...")
@@ -114,7 +114,7 @@ class AuditAttack(object):
       self.poisoning['data'] = self.poisoning[pois_ct]
 
     print("Inside auditor.run, created poisoned dataset")
-    poison_scores, unpois_scores = self.run_experiments(num_trials)
+    poison_scores, unpois_scores = self.run_experiments(num_trials, eps)
 
     results = compute_results(poison_scores, unpois_scores, pois_ct,
                               alpha=alpha, threshold=threshold)
