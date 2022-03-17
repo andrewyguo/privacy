@@ -192,8 +192,8 @@ def membership_test(model, pois_x, pois_y):
 
   pois_y = np.array([0, 1]) if pois_y == 1 else np.array([1, 0])
 
-  res_1 = 1.0 / (1 + np.exp(pois_x.dot(model)))
-  res_2 = 1.0 / (1 + np.exp(np.zeros_like(pois_x).dot(model)))
+  res_1 = 1.0 / (1 + np.exp(pois_x.dot(model) * -1))
+  res_2 = 1.0 / (1 + np.exp(np.zeros_like(pois_x).dot(model) * -1))
 
   probs = np.array([[1 - res_1, res_1], 
                     [1 - res_2, res_2]])
@@ -220,13 +220,22 @@ def train_and_score(dataset):
   pois_y = 1 if pois_y[1] == 1 else 0
 
   model, _ = ApproximateMinimaPerturbationLR.run_classification(x, y, epsilon=eps, delta=0.1, lambda_param=None)
+  
+  # Evaluate accuracy of model on training 
 
+  res = 1.0 / (1 + np.exp(x.dot(model) * -1))
+  res_one_hot = np.array([[0, 1] if y_i > 0.5 else [1, 0] for y_i in res])
+
+  accuracy = 1.0 - np.abs(y - res_one_hot).sum() / x.shape[0]
+
+  print("Model accuracy on training set: ", accuracy)
+  
   return membership_test(model, pois_x, pois_y)
 
 
 def main(unused_argv):
-  # eps_vals = [0.1, 0.3, 1, 3, 10]
-  eps_vals = [ 10]
+  eps_vals = [0.1, 0.3, 1, 3, 10, 100]
+  # eps_vals = [ 10]
   
   output = open("output/auditing_output_{}".format(datetime.now()), "w")
 
@@ -249,7 +258,7 @@ def main(unused_argv):
 
   train_x = np.reshape(train_x, (train_x.shape[0], train_x.shape[1] * train_x.shape[2]))
 
-  output.write(datetime.now().strftime("%d/%m/%Y %H:%M:%S"))
+  output.write(datetime.now().strftime("%d/%m/%Y %H:%M:%S") + "\n")
   for analysis_eps in eps_vals: 
     auditor = audit.AuditAttack(train_x, train_y, train_and_score)
 
@@ -267,9 +276,9 @@ def main(unused_argv):
     print("At threshold={}, epsilon={}.".format(thresh, eps))
     print("The best accuracy at distinguishing poisoning is {}.".format(acc))
 
-    output.write("Analysis epsilon is {}.".format(eps))
-    output.write("At threshold={}, epsilon={}.".format(thresh, eps))
-    output.write("The best accuracy at distinguishing poisoning is {}.".format(acc))
+    output.write("Analysis epsilon is {}.\n".format(analysis_eps))
+    output.write("At threshold={}, epsilon={}.\n".format(thresh, eps))
+    output.write("The best accuracy at distinguishing poisoning is {}.\n".format(acc))
 
   output.close()
   # print("noise_std: ", FLAGS.noise_std)
