@@ -90,9 +90,10 @@ def amp_run_classification(x, y, loss_func, grad_func,
 
     def private_loss(theta, x, y):
         raw_loss = loss_func(theta, x, y)
-        result = (raw_loss + ((big_lambda/(2*n)) *
-                             (np.linalg.norm(theta, ord=2) ** 2)) + \
-                 (noise_obj.T @ theta)) * gamma_mult
+        print("raw_loss:", raw_loss)
+        result = (raw_loss + ((big_lambda/(2*n)) * (np.linalg.norm(theta, ord=2) ** 2)) + (noise_obj.T @ theta)) * gamma_mult
+        print("loss after AMP :", result)
+        
         return result
 
     def private_gradient(theta, x, y, use_gamma_mult = True):

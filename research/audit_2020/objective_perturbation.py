@@ -216,16 +216,31 @@ def train_and_score(dataset):
   if len(x.shape) == 3:
     x = np.reshape(x, (x.shape[0], x.shape[1] * x.shape[2]))
   
-  y = np.argmax(y, axis=1)
-  pois_y = 1 if pois_y[1] == 1 else 0
+  # Get y in range of {-1, 1}
+  y_lr = np.argmax(y, axis=1) * 2 - 1 
 
-  model, _ = ApproximateMinimaPerturbationLR.run_classification(x, y, epsilon=eps, delta=0.1, lambda_param=None)
+  # print("y_lr:", y_lr[:10])
+  # print("x,shape:", x.shape)
+  # print("x:", x[:1])
+  # print("pois_x: ", pois_x, "pois_x.shape", pois_x.shape)
+
+  pois_y = 1 if pois_y[1] == 1 else -1
+
+  model, _ = ApproximateMinimaPerturbationLR.run_classification(x, y_lr, epsilon=eps, delta=0.01, lambda_param=None)
   
   # Evaluate accuracy of model on training 
-
+  # print("model:", model)
+  # print("x.shape", x.shape)
+  # print("model.shape", model.shape)
+  # print("x:", x[0])
+  n = x.dot(model) * -1
+  # print("n:", n[:10])
   res = 1.0 / (1 + np.exp(x.dot(model) * -1))
+  # print("res:", res[:10])
   res_one_hot = np.array([[0, 1] if y_i > 0.5 else [1, 0] for y_i in res])
 
+  # print(res_one_hot[:10])
+  # print(y[:10])
   accuracy = 1.0 - np.abs(y - res_one_hot).sum() / x.shape[0]
 
   print("Model accuracy on training set: ", accuracy)
@@ -235,9 +250,9 @@ def train_and_score(dataset):
 
 def main(unused_argv):
   eps_vals = [0.1, 0.3, 1, 3, 10, 100]
-  # eps_vals = [ 10]
+  eps_vals = [ 10]
   
-  output = open("output/auditing_output_{}".format(datetime.now()), "w")
+  output = open("output/auditing_output", "w")
 
   del unused_argv
   # Load training and test data.
@@ -246,7 +261,7 @@ def main(unused_argv):
   (train_x, train_y), _ = tf.keras.datasets.fashion_mnist.load_data()
   train_inds = np.where(train_y < 2)[0]
 
-  train_x = -.5 + train_x[train_inds] / 255.
+  train_x = train_x[train_inds] / 255. - 0.5 # This was originally included, not sure why
 
   train_y = np.eye(2)[train_y[train_inds]]
 

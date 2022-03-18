@@ -1,6 +1,7 @@
 import numpy as np
 
 
+iteration = 0
 class LogisticRegression():
     @staticmethod
     def loss(theta, x, y, lambda_param=None):
@@ -16,16 +17,33 @@ class LogisticRegression():
 
         # print("Shape of the initial model y: ", y.shape)
 
-        exponent =  -1 * y * x.dot(theta)
 
+        # hypothesis = x.dot(theta)
+        # print("hypothesis:", hypothesis[:10])
+        # print("x:", x[:10])
+        # print("len(x)", len(x))
+        # print("y:", y[:10])
+        # print("theta:", theta[:10])
+
+        # loss = -1 * y * np.log(hypothesis) - (1 - y) * np.log(1 - hypothesis)
+        # print("loss:", loss[:10])
         # print("y[0:10]", y[0:10])
         # print("exponent[0:10]", exponent[0:10])
         # print("exponent max", max(exponent))
 
         # print("np.sum(np.log(1+np.exp(exponent))) / len(x)", np.sum(np.log(1+np.exp(exponent))) / len(x))
         # print(" len(x)",  len(x))
+        global iteration 
+        
+        # print("y inside loss:", y[:10])
+        exponent =  -y * (x.dot(theta))
+        # print("exponent:", exponent)
+        loss = np.sum(np.log(1+np.exp(exponent))) / x.shape[0]
+        print("iteration: ",  iteration, "loss: ", loss)
+        iteration += 1
 
-        return np.sum(np.log(1+np.exp(exponent))) / len(x)
+        return loss 
+        # return np.sum(loss) / len(x)
 
     @staticmethod
     def gradient(theta, x, y, lambda_param=None):
